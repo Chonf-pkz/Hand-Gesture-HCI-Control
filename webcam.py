@@ -15,12 +15,13 @@ def calculate_iou(box_a, box_b):
     S_a = box_a[2] * box_a[3]
     S_b = box_b[2] * box_b[3]
     left = max(box_a[0], box_b[0])
-    top = max(box_b[0], box_b[1])
+    top = max(box_a[1], box_b[1])
     right = min(box_a[0] + box_a[2], box_b[0] + box_b[2])
-    bottom = min(box_b[0] + box_a[3], box_b[1] + box_b[3])
+    bottom = min(box_a[1] + box_a[3], box_b[1] + box_b[3])
     S_i = max(0, right - left) * max(0, bottom - top)
+    union = S_a + S_b - S_i
 
-    return (S_i / (S_a + S_b - S_i))
+    return (S_i / union) if union > 0 else 0
 
 def get_hand_bboxes(hands):
     bboxes = []
@@ -38,13 +39,6 @@ def get_hand_bboxes(hands):
             h = max(ys) - y
 
             bboxes.append([x,y,w,h])
-
-    if len(bboxes) > 1:
-        box_a = bboxes[0]
-        box_b = bboxes[1]
-        iou = calculate_iou(box_a, box_b)
-    
-        print(f"IoU: {iou}")
 
     return bboxes
 
@@ -90,9 +84,7 @@ def draw_hands(frame, hands, connections):
             )
             cv.line(annotated_frame, start_pixel, end_pixel, (255,255,255), 2)
 
-    values = get_hand_bboxes(hands)
-
-    return annotated_frame, values
+    return annotated_frame, hands
 
 def main():
     base_options = python.BaseOptions(
@@ -102,7 +94,7 @@ def main():
     options = vision.HandLandmarkerOptions(
         base_options=base_options,
         running_mode=vision.RunningMode.VIDEO,
-        num_hands=1
+        num_hands=2
     )
     detector = vision.HandLandmarker.create_from_options(options)
     camera = cv.VideoCapture(0)
@@ -132,12 +124,20 @@ def main():
             #         print(features[:3])
             # print(result.hand_landmarks) 
             # This line to show the list in the result, that is present the output of the detector got which hand that is recognited
-            annotated_frame, values = draw_hands(
+            annotated_frame, hands = draw_hands(
                 frame,
                 result.hand_landmarks,
                 connections
             )
+            values = get_hand_bboxes(hands)
             annotated_frame = draw_bbox(annotated_frame, values)
+            if len(values) > 1:
+                box_a = values[0]
+                box_b = values[1]
+                iou = calculate_iou(box_a, box_b)
+            
+                print(f"IoU: {iou}")
+
             cv.imshow("camera", annotated_frame)
         else:
             print("Can't connect to the camera")
